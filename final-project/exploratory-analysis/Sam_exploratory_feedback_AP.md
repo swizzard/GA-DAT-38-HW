@@ -1,0 +1,2 @@
+Great exploratory analysis, the only thing I might ask you to do is add more commentary to go along with your charts. I noticed some of the quick sentences you've included, but try to expand on that a litle bit and explain to the viewer what you're seeing and how it will affect your modeling thought process or expected outcome. Good story telling will help engage with your audience during the final presentation. 
+Here are examples of other people's notebooks posted online: [Most view gallery](http://nb.bianp.net/sort/views/)
