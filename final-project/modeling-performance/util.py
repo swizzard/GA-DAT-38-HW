@@ -7,11 +7,10 @@ import os
 import re
 import sys
 
-from IPython.display import Image
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import pydot
-from sklearn.tree import export_graphviz
+from sklearn.metrics import confusion_matrix, f1_score
 
 
 # common data
@@ -199,15 +198,120 @@ def remove_outliers(df, col_name, max_devs=3):
     return df[(np.abs(col - mean)) <= (std * max_devs)]
 
 
-def show_tree(model):
-    dot_data = StringIO()
-    export_graphviz(model, 
-                    out_file=dot_data, 
-                    feature_names=X.columns, 
-                    filled=True, rounded=True)
-    graph = pydot.graph_from_dot_data(dot_data.getvalue())
-    return Image(graph[0].create_png())
+def plot_confusion_matrix(true_labels, pred_labels, title, cmap=plt.cm.Blues):
+    """
+    Plot a confusion matrix. Adapted from 
+    http://scikit-learn.org/stable/auto_examples/model_selection/plot_confusion_matrix.html
+    :param true_labels: true labels
+    :type true_labels: pandas.DataFrame
+    :param pred_labels: predicted labels
+    :type true_labels: numpy.ndarray
+    :param title: title of the figure
+    :type title: str
+    :param cmap: color map to use in the plot
+    :type cmap: matplotlib.colors.LinearSegmentedColormap object
+    :return: None
+    """
+    cm = confusion_matrix(true_labels, pred_labels)
+    plt.imshow(cm, interpolation='nearest', cmap=cmap)
+    plt.title(title)
+    plt.colorbar()
+    tick_marks = np.arange(3)
+    labels = ['B', 'S', 'X']
+    plt.xticks(tick_marks, labels, rotation=45)
+    plt.yticks(tick_marks, labels)
+    plt.tight_layout()
+    plt.ylabel('True label')
+    plt.xlabel('Predicted label')
 
+
+def plot_weights(model, cols):
+    """
+    Plot the relative weights assigned by a model to the columns in the data
+    :param model: the model generating the weights
+    :param cols: names of the features in the data
+    :return: None
+    """
+    pd.DataFrame({'Features': cols,
+                  'Importances': model.feature_importances_}).sort_values(
+        'Importances', ascending=False).plot(kind='bar', x='Features',
+                                             y='Importances')
+
+
+def eval_model(true_labels, pred_labels, title):
+    """
+    Evaluate a model by calculating and printing its F1 score and
+    plotting its confusion matrix
+    """
+    print '{} model F1 score: {}'.format(title, 
+                                         f1_score(true_labels, pred_labels,
+                                                  average='micro'))
+    labels = ('B', 'S', 'X')
+    true_pcts = [pct_of(true_labels, label) for label in labels]
+    pred_pcts = [pct_of(pred_labels, label) for label in labels]
+    print 'True B: {:%}\tTrue S: {:%}\tTrue X: {:%}'.format(
+        *true_pcts)
+    print 'Predicted B: {:%}\tPredicted S: {:%}\tPredicted X: {:%}'.format(
+        *pred_pcts)
+    plot_confusion_matrix(true_labels, pred_labels, title, plt.cm.Blues)
+
+
+def pct_of(arr, val):
+    """
+    Calculate the % of values in an array matching a target value
+    :param arr: array containing values
+    :type arr: sequence
+    :param val: value to match
+    :type val: any
+    :return: float
+    """
+    return float(len([item for item in arr if item == val])) / len(arr)
+
+
+def preds_labels(df, cols):
+    """
+    Retrieve the predictors and labels from a dataframe
+    :param df: dataframe to extract from
+    :type df: pandas.DataFrame object
+    :param cols: predictor columns
+    :type cols: list of str
+    :return: (pd.DataFrame, pd.Series)
+    """
+    return df[cols], df.type
+
+
+def train_and_plot(model, train, test, pred_cols, name, **model_args):
+    """
+    Train and test a model and display the results
+    :param model: model to train
+    :param train_preds: training predictors
+    :param train_y: training labels
+    :param test_preds: test predictors
+    :param test_y: test labels
+    :param cmap: color map
+    :kwargs model_args: keyword arguments to use when initializing the model
+    :return: (fitted) model, predicted labels
+    """
+    mod = model(**model_args)
+    train_x, train_y = preds_labels(train, pred_cols)
+    mod.fit(train_x, train_y)
+    test_x, test_y = preds_labels(test, pred_cols)
+    pred_labels = mod.predict(test_x)
+    eval_model(test_y, pred_labels, name)
+    plot_weights(mod, pred_cols)
+    return mod, pred_labels
+
+
+def pad_training(df):
+    ss = df[df.type == 'S']
+    sl = len(ss)
+    xs = df[df.type == 'X']
+    xl = len(xs)
+    x_samp = xs.sample(n=(sl - xl), replace=True)
+    bs = df[df.type == 'B']
+    bl = len(bs)
+    b_samp = bs.sample(n=(sl - bl), replace=True)
+    return pd.concat([df, b_samp, x_samp])
 
 
 if __name__ == '__main__' and len(sys.argv) > 1:
